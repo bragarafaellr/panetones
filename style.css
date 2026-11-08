@@ -25,3 +25,5 @@ input, textarea, select { width: 100%; padding: 10px; border: 1px solid #ccc; bo
 table { width: 100%; border-collapse: collapse; }
 td, th { padding: 4px; text-align: left; }
 [hidden] { display: none !important; }
+.galeria { display: flex; gap: 8px; overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding: 0 16px; margin: 0 -16px; padding: 0 16px 8px; }
+.galeria img { height: 260px; width: auto; border-radius: 12px; scroll-snap-align: start; flex: none; }
