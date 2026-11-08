@@ -34,7 +34,6 @@
       <label for="obs">Observações (opcional)</label>
       <textarea id="obs" rows="2"></textarea>
       <p id="erro" class="erro" role="alert"></p>
-      <button class="principal" id="enviar">Enviar pedido</button>
     </form>
   </div>
 
@@ -97,7 +96,13 @@ $('produtos').onclick = e => {
   $('continuar').disabled = total === 0;
 };
 
-$('continuar').onclick = () => { $('form').hidden = false; $('nome').focus(); $('form').scrollIntoView(); };
+$('continuar').onclick = () => {
+  if (!$('form').hidden) return $('form').requestSubmit();
+  $('form').hidden = false;
+  $('continuar').textContent = 'Enviar pedido';
+  $('nome').focus();
+  $('form').scrollIntoView();
+};
 
 $('whatsapp').oninput = e => {
   e.target.value = e.target.value.replace(/\D/g, '').slice(0, 11)
@@ -110,7 +115,7 @@ $('form').onsubmit = async e => {
   if (whatsapp.length < 10) return $('erro').textContent = 'WhatsApp inválido';
   const itens = itensDoPedido();
   if (!itens.length) return $('erro').textContent = 'Escolha ao menos um panetone';
-  $('enviar').disabled = true;
+  $('continuar').disabled = true;
   $('erro').textContent = '';
   try {
     const r = await fetch(CONFIG.apiUrl, { method: 'POST', body: JSON.stringify({ acao: 'criar', nome: $('nome').value, whatsapp, itens, obs: $('obs').value }) }).then(r => r.json());
@@ -118,7 +123,7 @@ $('form').onsubmit = async e => {
     mostrarPagamento(r.id, r.total, itens);
   } catch (err) {
     $('erro').textContent = 'Não foi possível enviar: ' + err.message;
-    $('enviar').disabled = false;
+    $('continuar').disabled = false;
   }
 };
 
