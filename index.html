@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Panetones Solidários</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <h1>Panetones Solidários</h1>
+  <p id="sub">Renda revertida para doação · Pedidos até 19/12</p>
+
+  <div id="loja">
+    <div id="produtos"></div>
+
+    <form id="form" class="card" hidden>
+      <h2>Seus dados</h2>
+      <label for="nome">Nome</label>
+      <input id="nome" required autocomplete="name">
+      <label for="whatsapp">WhatsApp</label>
+      <input id="whatsapp" required inputmode="tel" autocomplete="tel" placeholder="(11) 91234-5678">
+      <label for="obs">Observações (opcional)</label>
+      <textarea id="obs" rows="2"></textarea>
+      <p id="erro" class="erro" role="alert"></p>
+      <button class="principal" id="enviar">Enviar pedido</button>
+    </form>
+  </div>
+
+  <div id="pagamento" class="card" hidden>
+    <h2>Pedido <span id="pedidoId"></span></h2>
+    <div id="resumo"></div>
+    <p><strong>Total: <span id="pedidoTotal"></span></strong></p>
+    <p>Pague com PIX:</p>
+    <div id="qr" class="qr"></div>
+    <button class="principal" id="copiar">Copiar código PIX</button>
+    <a class="principal" id="comprovante" target="_blank" rel="noopener">Enviar comprovante no WhatsApp</a>
+  </div>
+</main>
+
+<div class="rodape" id="rodape">
+  <div><strong id="total">R$ 0,00</strong><button class="principal" id="continuar" disabled>Continuar</button></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<script src="config.js"></script>
+<script src="pix.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const brl = v => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const qtd = {}; // 'id|tamanho' -> quantidade
+
+function itensDoPedido() {
+  return Object.entries(qtd).filter(([, q]) => q > 0).map(([k, q]) => {
+    const [id, tamanho] = k.split('|');
+    return { id, tamanho, qtd: q };
+  });
+}
+const preco = i => CONFIG.produtos.find(p => p.id === i.id).precos[i.tamanho];
+const nomeItem = i => `${CONFIG.produtos.find(p => p.id === i.id).nome} ${i.tamanho.replace('g', ' g')}`;
+
+if (Date.now() > new Date(CONFIG.dataLimite)) {
+  $('sub').textContent = 'Pedidos encerrados';
+  $('loja').hidden = $('rodape').hidden = true;
+} else {
+  $('produtos').innerHTML = CONFIG.produtos.map(p => `
+    <div class="card"><h2>${p.nome}</h2>
+      ${Object.entries(p.precos).map(([t, v]) => `
+        <div class="linha"><span>${t.replace('g', ' g')} · ${brl(v)}</span>
+          <span class="stepper">
+            <button type="button" data-k="${p.id}|${t}" data-d="-1" aria-label="Menos ${p.nome} ${t}">−</button>
+            <span id="q-${p.id}|${t}">0</span>
+            <button type="button" data-k="${p.id}|${t}" data-d="1" aria-label="Mais ${p.nome} ${t}">+</button>
+          </span></div>`).join('')}
+    </div>`).join('');
+}
+
+$('produtos').onclick = e => {
+  const b = e.target.closest('button[data-k]');
+  if (!b) return;
+  const k = b.dataset.k;
+  qtd[k] = Math.max(0, (qtd[k] || 0) + Number(b.dataset.d));
+  $('q-' + k).textContent = qtd[k];
+  const total = itensDoPedido().reduce((s, i) => s + preco(i) * i.qtd, 0);
+  $('total').textContent = brl(total);
+  $('continuar').disabled = total === 0;
+};
+
+$('continuar').onclick = () => { $('form').hidden = false; $('nome').focus(); $('form').scrollIntoView(); };
+
+$('whatsapp').oninput = e => {
+  e.target.value = e.target.value.replace(/\D/g, '').slice(0, 11)
+    .replace(/^(\d{2})(\d)/, '($1) $2').replace(/(\d)(\d{4})$/, '$1-$2');
+};
+
+$('form').onsubmit = async e => {
+  e.preventDefault();
+  const whatsapp = $('whatsapp').value.replace(/\D/g, '');
+  if (whatsapp.length < 10) return $('erro').textContent = 'WhatsApp inválido';
+  const itens = itensDoPedido();
+  if (!itens.length) return $('erro').textContent = 'Escolha ao menos um panetone';
+  $('enviar').disabled = true;
+  $('erro').textContent = '';
+  try {
+    const r = await fetch(CONFIG.apiUrl, { method: 'POST', body: JSON.stringify({ acao: 'criar', nome: $('nome').value, whatsapp, itens, obs: $('obs').value }) }).then(r => r.json());
+    if (r.erro) throw new Error(r.erro);
+    mostrarPagamento(r.id, r.total, itens);
+  } catch (err) {
+    $('erro').textContent = 'Não foi possível enviar: ' + err.message;
+    $('enviar').disabled = false;
+  }
+};
+
+function mostrarPagamento(id, total, itens) {
+  $('loja').hidden = $('rodape').hidden = true;
+  $('pagamento').hidden = false;
+  $('pedidoId').textContent = id;
+  $('pedidoTotal').textContent = brl(total);
+  $('resumo').innerHTML = itens.map(i => `<div class="linha"><span>${i.qtd}× ${nomeItem(i)}</span><span>${brl(preco(i) * i.qtd)}</span></div>`).join('');
+  $('comprovante').href = `https://wa.me/${CONFIG.whatsappComprovante}?text=${encodeURIComponent('Comprovante do pedido ' + id)}`;
+  if (CONFIG.pix.chave === 'TODO_CHAVE_PIX') {
+    $('qr').classList.add('vazio');
+    $('qr').textContent = 'QR code PIX em breve';
+    $('copiar').hidden = true;
+  } else {
+    const codigo = gerarPix({ ...CONFIG.pix, valor: total, txid: id });
+    const qr = qrcode(0, 'M');
+    qr.addData(codigo);
+    qr.make();
+    $('qr').innerHTML = qr.createSvgTag({ scalable: true, margin: 8, alt: 'QR code PIX' });
+    $('copiar').onclick = () => navigator.clipboard.writeText(codigo).then(() => $('copiar').textContent = 'Código copiado!');
+  }
+  scrollTo(0, 0);
+}
+</script>
+</body>
+</html>

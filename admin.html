@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Painel de Pedidos</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <h1>Pedidos</h1>
+
+  <form id="login" class="card" hidden>
+    <label for="senha">Senha</label>
+    <input id="senha" type="password" required autocomplete="current-password">
+    <button class="principal">Entrar</button>
+  </form>
+
+  <div id="painel" hidden>
+    <div class="acoes"><button id="atualizar">Atualizar</button><button id="sair">Sair</button></div>
+    <div class="card" id="totais"></div>
+    <label for="filtro">Status</label>
+    <select id="filtro">
+      <option value="">Todos</option>
+      <option>Aguardando pagamento</option><option>Pago</option><option>Entregue</option><option>Cancelado</option>
+    </select>
+    <div id="lista"></div>
+  </div>
+  <p id="erro" class="erro" role="alert"></p>
+</main>
+
+<script src="config.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const brl = v => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
+const produto = id => CONFIG.produtos.find(p => p.id === id) || { nome: id };
+let pedidos = [];
+
+const api = d => fetch(CONFIG.apiUrl, { method: 'POST', body: JSON.stringify({ ...d, token: localStorage.getItem('token') }) }).then(r => r.json());
+
+async function carregar() {
+  $('erro').textContent = '';
+  try {
+    const r = await api({ acao: 'listar' });
+    if (r.erro === 'Não autorizado') { sair(); return $('erro').textContent = 'Senha incorreta'; }
+    if (r.erro) throw new Error(r.erro);
+    pedidos = r.pedidos;
+    $('login').hidden = true;
+    $('painel').hidden = false;
+    render();
+  } catch (err) { $('erro').textContent = 'Erro: ' + err.message; }
+}
+
+function render() {
+  const soma = st => pedidos.filter(p => st.includes(p.status)).reduce((s, p) => s + Number(p.total), 0);
+  const producao = {};
+  pedidos.filter(p => p.status !== 'Cancelado').forEach(p => p.itens.forEach(i => {
+    producao[i.id + '|' + i.tamanho] = (producao[i.id + '|' + i.tamanho] || 0) + i.qtd;
+  }));
+  $('totais').innerHTML = `
+    <p>Arrecadado: <strong>${brl(soma(['Pago', 'Entregue']))}</strong><br>A receber: <strong>${brl(soma(['Aguardando pagamento']))}</strong></p>
+    <table><tr><th>A produzir</th><th>500 g</th><th>250 g</th></tr>
+    ${CONFIG.produtos.map(p => `<tr><td>${p.nome}</td><td>${producao[p.id + '|500g'] || 0}</td><td>${producao[p.id + '|250g'] || 0}</td></tr>`).join('')}
+    </table>`;
+
+  const f = $('filtro').value;
+  $('lista').innerHTML = pedidos.filter(p => !f || p.status === f).reverse().map(p => `
+    <div class="card">
+      <div class="linha"><strong>${esc(p.id)} · ${esc(p.nome)}</strong><span>${brl(p.total)}</span></div>
+      <div class="muted">${new Date(p.criadoEm).toLocaleString('pt-BR')} · ${esc(p.status)}</div>
+      <div>${p.itens.map(i => `${i.qtd}× ${esc(produto(i.id).nome)} ${esc(i.tamanho)}`).join('<br>')}</div>
+      ${p.obs ? `<div class="muted">Obs: ${esc(p.obs)}</div>` : ''}
+      <div class="acoes">
+        <button data-id="${esc(p.id)}" data-st="Pago">Pago</button>
+        <button data-id="${esc(p.id)}" data-st="Entregue">Entregue</button>
+        <button data-id="${esc(p.id)}" data-st="Cancelado">Cancelar</button>
+        <a href="https://wa.me/55${esc(p.whatsapp.replace(/\D/g, ''))}" target="_blank" rel="noopener">WhatsApp</a>
+      </div>
+    </div>`).join('') || '<p class="muted">Nenhum pedido.</p>';
+}
+
+$('lista').onclick = async e => {
+  const b = e.target.closest('button[data-st]');
+  if (!b) return;
+  b.disabled = true;
+  const r = await api({ acao: 'status', id: b.dataset.id, status: b.dataset.st }).catch(err => ({ erro: err.message }));
+  if (r.erro) { $('erro').textContent = 'Erro: ' + r.erro; b.disabled = false; return; }
+  carregar();
+};
+
+function sair() {
+  localStorage.removeItem('token');
+  pedidos = [];
+  $('painel').hidden = true;
+  $('login').hidden = false;
+}
+
+$('login').onsubmit = e => { e.preventDefault(); localStorage.setItem('token', $('senha').value); carregar(); };
+$('sair').onclick = sair;
+$('atualizar').onclick = carregar;
+$('filtro').onchange = render;
+
+localStorage.getItem('token') ? carregar() : sair();
+</script>
+</body>
+</html>
