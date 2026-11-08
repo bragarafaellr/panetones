@@ -6,7 +6,7 @@ const CONFIG = {
     { id: 'presunto-queijo', nome: 'Presunto e queijo', precos: { '500g': 115, '250g': 69 } }
   ],
   pix: {
-    chave: 'TODO_CHAVE_PIX',        // chave aleatória
+    chave: 'd253657f-5c6a-4140-a336-0b42dc2f9b10', // chave aleatória
     nome: 'COLOCAR_NOME_TITULAR',   // máx. 25 chars, sem acento
     cidade: 'COLOCAR_CIDADE'        // máx. 15 chars, sem acento
   },
