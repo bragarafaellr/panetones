@@ -11,7 +11,7 @@ const CONFIG = {
     nome: 'COLOCAR_NOME_TITULAR',   // máx. 25 chars, sem acento
     cidade: 'COLOCAR_CIDADE'        // máx. 15 chars, sem acento
   },
-  apiUrl: 'https://script.google.com/macros/s/AKfycbwE03_6oqCjF0GP4aCzc6tswOAlqMwx3A4g89BVUr1hMB2YYRMM4Gryaw7Z27YPOi39OA/exec',
+  apiUrl: 'https://script.google.com/macros/s/AKfycbwG6vUpNllt6ZVw_gLlimkMrFyeFV3sA0HoLRa9GnplN0epzlr1eUOdaRQ1pWO6QmGi4Q/exec',
   dataLimite: '2026-12-19T23:59:59-03:00',
   whatsappComprovante: '5511971672448'
 };
