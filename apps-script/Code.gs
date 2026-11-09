@@ -15,6 +15,11 @@ function doPost(e) {
   return ContentService.createTextOutput(JSON.stringify(r)).setMimeType(ContentService.MimeType.JSON);
 }
 
+// Diagnóstico: abrir a URL no navegador mostra os sabores que esta versão conhece
+function doGet() {
+  return ContentService.createTextOutput(JSON.stringify({ sabores: Object.keys(PRECOS) })).setMimeType(ContentService.MimeType.JSON);
+}
+
 function tratar(d) {
   if (d.acao === 'criar') return criar(d);
   const token = PropertiesService.getScriptProperties().getProperty('ADMIN_TOKEN');
@@ -40,7 +45,7 @@ function criar(d) {
   for (const i of d.itens) {
     const preco = PRECOS[i.id] && PRECOS[i.id][i.tamanho];
     const qtd = Number(i.qtd);
-    if (!preco || !Number.isInteger(qtd) || qtd < 0) return { erro: 'Item inválido' };
+    if (!preco || !Number.isInteger(qtd) || qtd < 0) return { erro: 'Item inválido: ' + i.id + ' ' + i.tamanho };
     if (qtd > 0) { itens.push({ id: i.id, tamanho: i.tamanho, qtd: qtd }); total += preco * qtd; }
   }
   if (total <= 0) return { erro: 'Pedido vazio' };
