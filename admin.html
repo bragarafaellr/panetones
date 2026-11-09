@@ -10,6 +10,7 @@
 <body>
 <main>
   <h1>Pedidos</h1>
+  <p id="erro" class="erro" role="alert"></p>
 
   <form id="login" class="card" hidden>
     <label for="senha">Senha</label>
@@ -27,7 +28,6 @@
     </select>
     <div id="lista"></div>
   </div>
-  <p id="erro" class="erro" role="alert"></p>
 </main>
 
 <script src="config.js"></script>
@@ -42,6 +42,8 @@ const api = d => fetch(CONFIG.apiUrl, { method: 'POST', body: JSON.stringify({ .
 
 async function carregar() {
   $('erro').textContent = '';
+  $('atualizar').disabled = true;
+  $('atualizar').textContent = 'Atualizando…';
   try {
     const r = await api({ acao: 'listar' });
     if (r.erro === 'Não autorizado') { sair(); return $('erro').textContent = 'Senha incorreta'; }
@@ -51,6 +53,7 @@ async function carregar() {
     $('painel').hidden = false;
     render();
   } catch (err) { $('erro').textContent = 'Erro: ' + err.message; }
+  finally { $('atualizar').disabled = false; $('atualizar').textContent = 'Atualizar'; }
 }
 
 function render() {
