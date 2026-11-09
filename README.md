@@ -1,4 +1,4 @@
-# Panetones Solidários
+# Panetones do Rogerio
 
 - Loja: https://bragarafaellr.github.io/panetones/
 - Painel: https://bragarafaellr.github.io/panetones/admin.html
