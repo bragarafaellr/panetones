@@ -2,7 +2,8 @@
 const PRECOS = {
   'frutas': { '500g': 95, '250g': 57 },
   'chocolate': { '500g': 115, '250g': 69 },
-  'presunto-queijo': { '500g': 115, '250g': 69 }
+  'presunto-queijo': { '500g': 115, '250g': 69 },
+  'goiabada-requeijao': { '500g': 95, '250g': 57 }
 };
 const DATA_LIMITE = new Date('2026-12-19T23:59:59-03:00');
 const STATUS = ['Aguardando pagamento', 'Pago', 'Entregue', 'Cancelado'];

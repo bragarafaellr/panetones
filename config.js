@@ -3,7 +3,8 @@ const CONFIG = {
   produtos: [
     { id: 'frutas', nome: 'Frutas', precos: { '500g': 95, '250g': 57 } },
     { id: 'chocolate', nome: 'Chocolate', precos: { '500g': 115, '250g': 69 } },
-    { id: 'presunto-queijo', nome: 'Presunto e queijo', precos: { '500g': 115, '250g': 69 } }
+    { id: 'presunto-queijo', nome: 'Presunto e queijo', precos: { '500g': 115, '250g': 69 } },
+    { id: 'goiabada-requeijao', nome: 'Goiabada com requeijão', precos: { '500g': 95, '250g': 57 } }
   ],
   pix: {
     chave: 'd253657f-5c6a-4140-a336-0b42dc2f9b10', // chave aleatória
