@@ -33,6 +33,7 @@
       <option value="">Todos</option>
       <option>Na fila</option><option>Fazendo</option><option>Pronto pra entrega</option><option>Enviado</option><option>Cancelado</option>
       <option value="cobrar">Falta cobrar</option>
+      <option value="Apagado">Apagados</option>
     </select>
     <div id="lista"></div>
   </div>
@@ -45,7 +46,8 @@ const brl = v => Number(v).toLocaleString('pt-BR', { style: 'currency', currency
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
 const produto = id => CONFIG.produtos.find(p => p.id === id) || { nome: id };
 const nomeItem = (id, tamanho) => `${esc(produto(id).nome)} ${esc(tamanho.replace('g', ' g'))}`;
-const ativo = p => p.etapa !== 'Cancelado' && p.etapa !== 'Enviado';
+const ativo = p => !['Apagado', 'Cancelado', 'Enviado'].includes(p.etapa);
+const conta = p => p.etapa !== 'Cancelado' && p.etapa !== 'Apagado'; // entra nos totais de dinheiro
 let pedidos = [];
 
 const api = d => fetch(CONFIG.apiUrl, { method: 'POST', body: JSON.stringify({ ...d, token: localStorage.getItem('token') }) }).then(r => r.json());
@@ -67,7 +69,7 @@ async function carregar() {
 }
 
 function render() {
-  const soma = cond => pedidos.filter(p => p.etapa !== 'Cancelado' && cond(p)).reduce((s, p) => s + Number(p.total), 0);
+  const soma = cond => pedidos.filter(p => conta(p) && cond(p)).reduce((s, p) => s + Number(p.total), 0);
   const falta = {};
   pedidos.filter(ativo).forEach(p => p.itens.forEach(i => {
     const k = i.id + '|' + i.tamanho;
@@ -80,7 +82,7 @@ function render() {
     </table>`;
 
   const f = $('filtro').value;
-  const mostra = p => !f || (f === 'cobrar' ? !p.pago && p.etapa !== 'Cancelado' : p.etapa === f);
+  const mostra = p => !f ? p.etapa !== 'Apagado' : f === 'cobrar' ? !p.pago && conta(p) : p.etapa === f;
   $('lista').innerHTML = pedidos.filter(mostra).reverse().map(p => {
     const id = esc(p.id);
     const prontos = Object.values(p.prontos).some(n => n > 0);
@@ -91,12 +93,14 @@ function render() {
       <div><strong>${esc(p.etapa)}</strong> · ${p.pago ? 'Pago' : 'Não pago'}</div>
       <div>${p.itens.map(i => `${i.qtd}× ${nomeItem(i.id, i.tamanho)} <span class="muted">(${Math.min(i.qtd, p.prontos[i.id + '|' + i.tamanho] || 0)} de ${i.qtd} pronto)</span>`).join('<br>')}</div>
       ${p.obs ? `<div class="muted">Obs: ${esc(p.obs)}</div>` : ''}
-      <div class="acoes">
+      <div class="acoes">${p.etapa === 'Apagado' ? `
+        <button data-id="${id}" data-acao="status" data-v="Na fila">Restaurar</button>` : `
         <button data-id="${id}" data-acao="pago" data-v="${!p.pago}" class="${p.pago ? 'on' : ''}" aria-pressed="${p.pago}">${p.pago ? 'Pago' : 'Não pago'}</button>
         ${ativo(p) ? `<button data-id="${id}" data-acao="status" data-v="Enviado">Enviado</button>
         <button data-id="${id}" data-acao="status" data-v="Cancelado">Cancelar</button>` : `<button data-id="${id}" data-acao="status" data-v="Na fila">Reabrir</button>`}
         ${prontos && ativo(p) ? `<button data-id="${id}" data-acao="desfazer">Desfazer prontos</button>` : ''}
         <a href="https://wa.me/55${esc(p.whatsapp.replace(/\D/g, ''))}" target="_blank" rel="noopener">WhatsApp</a>
+        <button data-id="${id}" data-acao="status" data-v="Apagado">Apagar</button>`}
       </div>
     </div>`;
   }).join('') || '<p class="muted">Nenhum pedido.</p>';
@@ -104,7 +108,8 @@ function render() {
 
 const confirmar = {
   Cancelado: 'Cancelar este pedido? Se ele tinha panetones prontos, registre-os de novo em "Saiu da fornada" para irem a outro pedido.',
-  desfazer: 'Desfazer os prontos deste pedido? Ele volta para a fila.'
+  desfazer: 'Desfazer os prontos deste pedido? Ele volta para a fila.',
+  Apagado: 'Apagar este pedido? Ele some da lista e dos totais. Dá para restaurar no filtro "Apagados".'
 };
 
 $('lista').onclick = async e => {
