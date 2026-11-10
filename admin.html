@@ -23,12 +23,8 @@
     <div class="card" id="totais"></div>
     <form id="fornada" class="card">
       <h2>Saiu da fornada</h2>
-      <label for="fSabor">Sabor</label>
-      <select id="fSabor"></select>
-      <label for="fTamanho">Tamanho</label>
-      <select id="fTamanho"><option value="500g">500 g</option><option value="250g">250 g</option></select>
-      <label for="fQtd">Quantidade</label>
-      <input id="fQtd" type="number" min="1" step="1" required inputmode="numeric">
+      <p class="muted">Preencha só o que saiu.</p>
+      <table id="fItens"></table>
       <button class="principal" id="fEnviar">Registrar e ver para quem vai</button>
       <div id="fResultado" role="status"></div>
     </form>
@@ -124,20 +120,29 @@ $('lista').onclick = async e => {
   carregar();
 };
 
-$('fSabor').innerHTML = CONFIG.produtos.map(p => `<option value="${p.id}">${p.nome}</option>`).join('');
+$('fItens').innerHTML = '<tr><th></th><th>500 g</th><th>250 g</th></tr>' + CONFIG.produtos.map(p => `<tr><td>${p.nome}</td>` +
+  ['500g', '250g'].map(t => `<td><input type="number" min="0" step="1" inputmode="numeric" data-id="${p.id}" data-tamanho="${t}" aria-label="${p.nome} ${t.replace('g', ' g')}"></td>`).join('') + '</tr>').join('');
 
+// Registra item por item com a mesma ação do script; cada item já distribuído fica gravado mesmo se um seguinte falhar
 $('fornada').onsubmit = async e => {
   e.preventDefault();
-  const item = { id: $('fSabor').value, tamanho: $('fTamanho').value, qtd: Number($('fQtd').value) };
+  const campos = [...$('fItens').querySelectorAll('input')].filter(c => c.value !== '' && Number(c.value) !== 0);
+  if (!campos.length) return $('fResultado').innerHTML = '<p class="erro">Preencha a quantidade de pelo menos um item.</p>';
+  if (campos.some(c => !Number.isInteger(Number(c.value)) || Number(c.value) < 0)) return $('fResultado').innerHTML = '<p class="erro">Use só números inteiros.</p>';
   $('fEnviar').disabled = true;
   $('fResultado').textContent = 'Registrando…';
-  const r = await api({ acao: 'fornada', ...item }).catch(err => ({ erro: err.message }));
+  let html = '';
+  for (const c of campos) {
+    const item = { id: c.dataset.id, tamanho: c.dataset.tamanho, qtd: Number(c.value) };
+    const r = await api({ acao: 'fornada', ...item }).catch(err => ({ erro: err.message }));
+    if (r.erro) { html += `<p class="erro">Erro em ${nomeItem(item.id, item.tamanho)}: ${esc(r.erro)}. Os itens acima foram registrados; confira e tente de novo só os que faltaram.</p>`; break; }
+    c.value = '';
+    html += `<p><strong>${item.qtd}× ${nomeItem(item.id, item.tamanho)}</strong></p>` +
+      r.destinos.map(d => `<div class="linha"><span>→ ${esc(d.id)} · ${esc(d.nome)}</span><strong>${d.qtd}</strong></div>`).join('') +
+      (r.sobra ? `<p class="muted">Sobrou ${r.sobra}: nenhum pedido esperando.</p>` : '');
+  }
   $('fEnviar').disabled = false;
-  if (r.erro) return $('fResultado').innerHTML = `<p class="erro">Erro: ${esc(r.erro)}</p>`;
-  $('fQtd').value = '';
-  $('fResultado').innerHTML = `<p><strong>${item.qtd}× ${nomeItem(item.id, item.tamanho)}</strong></p>` +
-    r.destinos.map(d => `<div class="linha"><span>→ ${esc(d.id)} · ${esc(d.nome)}</span><strong>${d.qtd}</strong></div>`).join('') +
-    (r.sobra ? `<p class="muted">Sobrou ${r.sobra}: nenhum pedido esperando.</p>` : '');
+  $('fResultado').innerHTML = html;
   carregar();
 };
 
