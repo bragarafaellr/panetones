@@ -8,7 +8,7 @@ Site estático (GitHub Pages) + Google Sheets/Apps Script como banco.
 ## Setup
 
 1. Criar a planilha Google "Panetones 2026" com uma aba chamada `Pedidos` e, na linha 1, o cabeçalho:
-   `id | criadoEm | nome | whatsapp | itens | total | obs | status | atualizadoEm`
+   `id | criadoEm | nome | whatsapp | itens | total | obs | status | atualizadoEm | prontos | pago`
 2. Na planilha: Extensões → Apps Script → apagar o conteúdo e colar `apps-script/Code.gs`. Salvar.
 3. Configurações do projeto (engrenagem) → Propriedades do script → adicionar `ADMIN_TOKEN` = senha do painel. **Nunca** colocar essa senha no repositório.
 4. Implantar → Nova implantação → tipo **App da Web** → Executar como: **eu** → Quem pode acessar: **Qualquer pessoa** → Implantar → autorizar → copiar a URL (`https://script.google.com/macros/s/.../exec`).
