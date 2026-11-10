@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <title>Painel de Pedidos</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="icone.png" type="image/png">
+<link rel="apple-touch-icon" href="icone.png">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -31,6 +34,7 @@
     <label for="filtro">Mostrar</label>
     <select id="filtro">
       <option value="">Todos</option>
+      <option value="fila">Próximos da fila</option>
       <option>Na fila</option><option>Fazendo</option><option>Pronto pra entrega</option><option>Enviado</option><option>Cancelado</option>
       <option value="cobrar">Falta cobrar</option>
       <option value="Apagado">Apagados</option>
@@ -82,13 +86,17 @@ function render() {
     </table>`;
 
   const f = $('filtro').value;
-  const mostra = p => !f ? p.etapa !== 'Apagado' : f === 'cobrar' ? !p.pago && conta(p) : p.etapa === f;
-  $('lista').innerHTML = pedidos.filter(mostra).reverse().map(p => {
+  const faltaNo = p => p.itens.reduce((s, i) => s + Math.max(0, i.qtd - (p.prontos[i.id + '|' + i.tamanho] || 0)), 0);
+  const mostra = p => !f ? p.etapa !== 'Apagado' : f === 'cobrar' ? !p.pago && conta(p) : f === 'fila' ? ativo(p) && faltaNo(p) > 0 : p.etapa === f;
+  const lista = pedidos.filter(mostra);
+  // Fila: mais antigo primeiro, igual à ordem em que a fornada distribui; o resto, mais novo primeiro
+  $('lista').innerHTML = (f === 'fila' ? lista : lista.reverse()).map((p, n) => {
     const id = esc(p.id);
     const prontos = Object.values(p.prontos).some(n => n > 0);
     return `
     <div class="card">
-      <div class="linha"><strong>${id} · ${esc(p.nome)}</strong><span>${brl(p.total)}</span></div>
+      <div class="linha"><strong>${f === 'fila' ? `${n + 1}º · ` : ''}${id} · ${esc(p.nome)}</strong><span>${brl(p.total)}</span></div>
+      ${f === 'fila' ? `<div>Falta: ${p.itens.filter(i => i.qtd > (p.prontos[i.id + '|' + i.tamanho] || 0)).map(i => `${i.qtd - (p.prontos[i.id + '|' + i.tamanho] || 0)}× ${nomeItem(i.id, i.tamanho)}`).join(', ')}</div>` : ''}
       <div class="muted">${new Date(p.criadoEm).toLocaleString('pt-BR')}</div>
       <div><strong>${esc(p.etapa)}</strong> · ${p.pago ? 'Pago' : 'Não pago'}</div>
       <div>${p.itens.map(i => `${i.qtd}× ${nomeItem(i.id, i.tamanho)} <span class="muted">(${Math.min(i.qtd, p.prontos[i.id + '|' + i.tamanho] || 0)} de ${i.qtd} pronto)</span>`).join('<br>')}</div>
