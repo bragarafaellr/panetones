@@ -21,10 +21,22 @@
   <div id="painel" hidden>
     <div class="acoes"><button id="atualizar">Atualizar</button><button id="sair">Sair</button></div>
     <div class="card" id="totais"></div>
-    <label for="filtro">Status</label>
+    <form id="fornada" class="card">
+      <h2>Saiu da fornada</h2>
+      <label for="fSabor">Sabor</label>
+      <select id="fSabor"></select>
+      <label for="fTamanho">Tamanho</label>
+      <select id="fTamanho"><option value="500g">500 g</option><option value="250g">250 g</option></select>
+      <label for="fQtd">Quantidade</label>
+      <input id="fQtd" type="number" min="1" step="1" required inputmode="numeric">
+      <button class="principal" id="fEnviar">Registrar e ver para quem vai</button>
+      <div id="fResultado" role="status"></div>
+    </form>
+    <label for="filtro">Mostrar</label>
     <select id="filtro">
       <option value="">Todos</option>
-      <option>Aguardando pagamento</option><option>Pago</option><option>Entregue</option><option>Cancelado</option>
+      <option>Na fila</option><option>Fazendo</option><option>Pronto pra entrega</option><option>Enviado</option><option>Cancelado</option>
+      <option value="cobrar">Falta cobrar</option>
     </select>
     <div id="lista"></div>
   </div>
@@ -36,6 +48,8 @@ const $ = id => document.getElementById(id);
 const brl = v => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
 const produto = id => CONFIG.produtos.find(p => p.id === id) || { nome: id };
+const nomeItem = (id, tamanho) => `${esc(produto(id).nome)} ${esc(tamanho.replace('g', ' g'))}`;
+const ativo = p => p.etapa !== 'Cancelado' && p.etapa !== 'Enviado';
 let pedidos = [];
 
 const api = d => fetch(CONFIG.apiUrl, { method: 'POST', body: JSON.stringify({ ...d, token: localStorage.getItem('token') }) }).then(r => r.json());
@@ -57,39 +71,73 @@ async function carregar() {
 }
 
 function render() {
-  const soma = st => pedidos.filter(p => st.includes(p.status)).reduce((s, p) => s + Number(p.total), 0);
-  const producao = {};
-  pedidos.filter(p => p.status !== 'Cancelado').forEach(p => p.itens.forEach(i => {
-    producao[i.id + '|' + i.tamanho] = (producao[i.id + '|' + i.tamanho] || 0) + i.qtd;
+  const soma = cond => pedidos.filter(p => p.etapa !== 'Cancelado' && cond(p)).reduce((s, p) => s + Number(p.total), 0);
+  const falta = {};
+  pedidos.filter(ativo).forEach(p => p.itens.forEach(i => {
+    const k = i.id + '|' + i.tamanho;
+    falta[k] = (falta[k] || 0) + Math.max(0, i.qtd - (p.prontos[k] || 0));
   }));
   $('totais').innerHTML = `
-    <p>Arrecadado: <strong>${brl(soma(['Pago', 'Entregue']))}</strong><br>A receber: <strong>${brl(soma(['Aguardando pagamento']))}</strong></p>
-    <table><tr><th>A produzir</th><th>500 g</th><th>250 g</th></tr>
-    ${CONFIG.produtos.map(p => `<tr><td>${p.nome}</td><td>${producao[p.id + '|500g'] || 0}</td><td>${producao[p.id + '|250g'] || 0}</td></tr>`).join('')}
+    <p>Recebido: <strong>${brl(soma(p => p.pago))}</strong><br>Falta cobrar: <strong>${brl(soma(p => !p.pago))}</strong></p>
+    <table><tr><th>Falta fazer</th><th>500 g</th><th>250 g</th></tr>
+    ${CONFIG.produtos.map(p => `<tr><td>${p.nome}</td><td>${falta[p.id + '|500g'] || 0}</td><td>${falta[p.id + '|250g'] || 0}</td></tr>`).join('')}
     </table>`;
 
   const f = $('filtro').value;
-  $('lista').innerHTML = pedidos.filter(p => !f || p.status === f).reverse().map(p => `
+  const mostra = p => !f || (f === 'cobrar' ? !p.pago && p.etapa !== 'Cancelado' : p.etapa === f);
+  $('lista').innerHTML = pedidos.filter(mostra).reverse().map(p => {
+    const id = esc(p.id);
+    const prontos = Object.values(p.prontos).some(n => n > 0);
+    return `
     <div class="card">
-      <div class="linha"><strong>${esc(p.id)} · ${esc(p.nome)}</strong><span>${brl(p.total)}</span></div>
-      <div class="muted">${new Date(p.criadoEm).toLocaleString('pt-BR')} · ${esc(p.status)}</div>
-      <div>${p.itens.map(i => `${i.qtd}× ${esc(produto(i.id).nome)} ${esc(i.tamanho)}`).join('<br>')}</div>
+      <div class="linha"><strong>${id} · ${esc(p.nome)}</strong><span>${brl(p.total)}</span></div>
+      <div class="muted">${new Date(p.criadoEm).toLocaleString('pt-BR')}</div>
+      <div><strong>${esc(p.etapa)}</strong> · ${p.pago ? 'Pago' : 'Não pago'}</div>
+      <div>${p.itens.map(i => `${i.qtd}× ${nomeItem(i.id, i.tamanho)} <span class="muted">(${Math.min(i.qtd, p.prontos[i.id + '|' + i.tamanho] || 0)} de ${i.qtd} pronto)</span>`).join('<br>')}</div>
       ${p.obs ? `<div class="muted">Obs: ${esc(p.obs)}</div>` : ''}
       <div class="acoes">
-        <button data-id="${esc(p.id)}" data-st="Pago">Pago</button>
-        <button data-id="${esc(p.id)}" data-st="Entregue">Entregue</button>
-        <button data-id="${esc(p.id)}" data-st="Cancelado">Cancelar</button>
+        <button data-id="${id}" data-acao="pago" data-v="${!p.pago}" class="${p.pago ? 'on' : ''}" aria-pressed="${p.pago}">${p.pago ? 'Pago' : 'Não pago'}</button>
+        ${ativo(p) ? `<button data-id="${id}" data-acao="status" data-v="Enviado">Enviado</button>
+        <button data-id="${id}" data-acao="status" data-v="Cancelado">Cancelar</button>` : `<button data-id="${id}" data-acao="status" data-v="Na fila">Reabrir</button>`}
+        ${prontos && ativo(p) ? `<button data-id="${id}" data-acao="desfazer">Desfazer prontos</button>` : ''}
         <a href="https://wa.me/55${esc(p.whatsapp.replace(/\D/g, ''))}" target="_blank" rel="noopener">WhatsApp</a>
       </div>
-    </div>`).join('') || '<p class="muted">Nenhum pedido.</p>';
+    </div>`;
+  }).join('') || '<p class="muted">Nenhum pedido.</p>';
 }
 
+const confirmar = {
+  Cancelado: 'Cancelar este pedido? Se ele tinha panetones prontos, registre-os de novo em "Saiu da fornada" para irem a outro pedido.',
+  desfazer: 'Desfazer os prontos deste pedido? Ele volta para a fila.'
+};
+
 $('lista').onclick = async e => {
-  const b = e.target.closest('button[data-st]');
+  const b = e.target.closest('button[data-acao]');
   if (!b) return;
+  const { id, acao, v } = b.dataset;
+  const pergunta = confirmar[acao === 'status' ? v : acao];
+  if (pergunta && !confirm(pergunta)) return;
   b.disabled = true;
-  const r = await api({ acao: 'status', id: b.dataset.id, status: b.dataset.st }).catch(err => ({ erro: err.message }));
+  const dados = acao === 'pago' ? { pago: v === 'true' } : acao === 'status' ? { status: v } : {};
+  const r = await api({ acao, id, ...dados }).catch(err => ({ erro: err.message }));
   if (r.erro) { $('erro').textContent = 'Erro: ' + r.erro; b.disabled = false; return; }
+  carregar();
+};
+
+$('fSabor').innerHTML = CONFIG.produtos.map(p => `<option value="${p.id}">${p.nome}</option>`).join('');
+
+$('fornada').onsubmit = async e => {
+  e.preventDefault();
+  const item = { id: $('fSabor').value, tamanho: $('fTamanho').value, qtd: Number($('fQtd').value) };
+  $('fEnviar').disabled = true;
+  $('fResultado').textContent = 'Registrando…';
+  const r = await api({ acao: 'fornada', ...item }).catch(err => ({ erro: err.message }));
+  $('fEnviar').disabled = false;
+  if (r.erro) return $('fResultado').innerHTML = `<p class="erro">Erro: ${esc(r.erro)}</p>`;
+  $('fQtd').value = '';
+  $('fResultado').innerHTML = `<p><strong>${item.qtd}× ${nomeItem(item.id, item.tamanho)}</strong></p>` +
+    r.destinos.map(d => `<div class="linha"><span>→ ${esc(d.id)} · ${esc(d.nome)}</span><strong>${d.qtd}</strong></div>`).join('') +
+    (r.sobra ? `<p class="muted">Sobrou ${r.sobra}: nenhum pedido esperando.</p>` : '');
   carregar();
 };
 

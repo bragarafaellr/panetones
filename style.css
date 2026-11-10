@@ -27,3 +27,4 @@ td, th { padding: 4px; text-align: left; }
 [hidden] { display: none !important; }
 .galeria { display: flex; gap: 8px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 8px; }
 .galeria img { height: 260px; width: auto; border-radius: 12px; scroll-snap-align: start; flex: none; }
+.acoes button.on { background: #2e7d32; border-color: #2e7d32; color: #fff; }
