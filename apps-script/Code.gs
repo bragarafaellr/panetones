@@ -17,7 +17,7 @@ function doPost(e) {
 
 // Diagnóstico: abrir a URL no navegador mostra a versão e os sabores que esta implantação conhece
 function doGet() {
-  return ContentService.createTextOutput(JSON.stringify({ versao: 2, sabores: Object.keys(PRECOS) })).setMimeType(ContentService.MimeType.JSON);
+  return ContentService.createTextOutput(JSON.stringify({ versao: 3, sabores: Object.keys(PRECOS) })).setMimeType(ContentService.MimeType.JSON);
 }
 
 function tratar(d) {
@@ -67,14 +67,17 @@ function criar(d) {
   return { id: id, total: total };
 }
 
-// Etapa: Cancelado/Enviado são marcados à mão; o resto sai do que já está pronto
+// Etapa: Apagado/Cancelado/Enviado são marcados à mão; o resto sai do que já está pronto
 function etapa(status, itens, prontos) {
-  if (status === 'Cancelado') return 'Cancelado';
+  if (status === 'Apagado' || status === 'Cancelado') return status;
   if (status === 'Enviado' || status === 'Entregue') return 'Enviado';
   const pedidos = itens.reduce((s, i) => s + i.qtd, 0);
   const feitos = itens.reduce((s, i) => s + Math.min(i.qtd, prontos[i.id + '|' + i.tamanho] || 0), 0);
   return feitos === 0 ? 'Na fila' : feitos < pedidos ? 'Fazendo' : 'Pronto pra entrega';
 }
+
+// Pedidos fora da fila de produção
+function parado(p) { return ['Apagado', 'Cancelado', 'Enviado'].indexOf(p.etapa) >= 0; }
 
 function lerPedidos() {
   return aba().getDataRange().getValues().slice(1).map((r, n) => {
@@ -108,7 +111,7 @@ function fornada(d) {
   const destinos = [];
   for (const p of lerPedidos()) {
     if (!resta) break;
-    if (p.etapa === 'Cancelado' || p.etapa === 'Enviado') continue;
+    if (parado(p)) continue;
     const pedido = p.itens.filter(i => i.id === d.id && i.tamanho === d.tamanho).reduce((s, i) => s + i.qtd, 0);
     const falta = pedido - (p.prontos[chave] || 0);
     if (falta <= 0) continue;
@@ -122,7 +125,7 @@ function fornada(d) {
 }
 
 function mudarStatus(d) {
-  if (['Enviado', 'Cancelado', 'Na fila'].indexOf(d.status) < 0) return { erro: 'Status inválido' };
+  if (['Enviado', 'Cancelado', 'Apagado', 'Na fila'].indexOf(d.status) < 0) return { erro: 'Status inválido' };
   const p = acharPedido(d.id);
   gravar(p, d.status === 'Na fila' ? etapa('', p.itens, p.prontos) : d.status);
   return { ok: true };
@@ -138,6 +141,6 @@ function mudarPago(d) {
 function desfazer(d) {
   const p = acharPedido(d.id);
   p.prontos = {};
-  gravar(p, p.etapa === 'Cancelado' || p.etapa === 'Enviado' ? p.etapa : 'Na fila');
+  gravar(p, parado(p) ? p.etapa : 'Na fila');
   return { ok: true };
 }
