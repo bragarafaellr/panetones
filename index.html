@@ -20,6 +20,12 @@
     <img src="fotos/6.jpg" width="666" height="1000" alt="Homem mordendo um pedaço de panetone" loading="lazy">
     <img src="fotos/7.jpg" width="666" height="1000" alt="Panetone de chocolate aberto" loading="lazy">
     <img src="fotos/8.jpg" width="666" height="1000" alt="Panetone de chocolate aberto, por dentro" loading="lazy">
+    <img src="fotos/9.jpg" width="750" height="1000" alt="Panetone embrulhado para presente com laço vermelho" loading="lazy">
+    <img src="fotos/10.jpg" width="750" height="1000" alt="Panetones de goiabada recém-assados" loading="lazy">
+    <img src="fotos/11.jpg" width="750" height="1000" alt="Massa de panetone com gotas de chocolate antes de assar" loading="lazy">
+    <img src="fotos/12.jpg" width="750" height="1000" alt="Panetone de chocolate partido ao meio" loading="lazy">
+    <img src="fotos/13.jpg" width="750" height="1000" alt="Panetone de goiabada aberto" loading="lazy">
+    <img src="fotos/14.jpg" width="750" height="1000" alt="Pedaço de panetone com goiabada" loading="lazy">
   </div>
 
   <div id="loja">
@@ -59,6 +65,18 @@
 const $ = id => document.getElementById(id);
 const brl = v => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const qtd = {}; // 'id|tamanho' -> quantidade
+
+// Galeria passa sozinha; pausa alguns segundos depois de um toque
+const galeria = document.querySelector('.galeria');
+let tocouEm = 0;
+galeria.addEventListener('pointerdown', () => tocouEm = Date.now());
+if (!matchMedia('(prefers-reduced-motion: reduce)').matches) setInterval(() => {
+  if (Date.now() - tocouEm < 6000) return;
+  const fotos = [...galeria.children], inicio = fotos[0].offsetLeft;
+  const fim = galeria.scrollLeft + galeria.clientWidth >= galeria.scrollWidth - 2;
+  const prox = fim ? fotos[0] : fotos.find(f => f.offsetLeft - inicio > galeria.scrollLeft + 2);
+  galeria.scrollTo({ left: prox.offsetLeft - inicio, behavior: 'smooth' });
+}, 3000);
 
 function itensDoPedido() {
   return Object.entries(qtd).filter(([, q]) => q > 0).map(([k, q]) => {
