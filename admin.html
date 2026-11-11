@@ -33,11 +33,19 @@
     </form>
     <label for="filtro">Mostrar</label>
     <select id="filtro">
-      <option value="">Todos</option>
-      <option value="fila">Próximos da fila</option>
-      <option>Na fila</option><option>Fazendo</option><option>Pronto pra entrega</option><option>Enviado</option><option>Cancelado</option>
-      <option value="cobrar">Falta cobrar</option>
-      <option value="Apagado">Apagados</option>
+      <optgroup label="Dia a dia">
+        <option value="">Todos</option>
+        <option value="fila">Próximos da fila</option>
+        <option>Na fila</option><option>Fazendo</option><option>Pronto pra entrega</option>
+      </optgroup>
+      <optgroup label="De vez em quando">
+        <option value="cobrar">Falta cobrar</option>
+        <option>Enviado</option>
+      </optgroup>
+      <optgroup label="Arquivo">
+        <option>Cancelado</option>
+        <option value="Apagado">Apagados</option>
+      </optgroup>
     </select>
     <div id="lista"></div>
   </div>
