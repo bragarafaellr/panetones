@@ -5,6 +5,7 @@ const PRECOS = {
   'presunto-queijo': { '500g': 115, '250g': 69 },
   'goiabada-requeijao': { '500g': 95, '250g': 57 }
 };
+const LATA = 30; // embalagem especial opcional, só para 500 g; deve bater com config.js
 const DATA_LIMITE = new Date('2026-12-19T23:59:59-03:00');
 // Colunas: A id | B criadoEm | C nome | D whatsapp | E itens | F total | G obs | H status | I atualizadoEm | J prontos | K pago
 
@@ -17,7 +18,7 @@ function doPost(e) {
 
 // Diagnóstico: abrir a URL no navegador mostra a versão e os sabores que esta implantação conhece
 function doGet() {
-  return ContentService.createTextOutput(JSON.stringify({ versao: 4, sabores: Object.keys(PRECOS) })).setMimeType(ContentService.MimeType.JSON);
+  return ContentService.createTextOutput(JSON.stringify({ versao: 5, sabores: Object.keys(PRECOS) })).setMimeType(ContentService.MimeType.JSON);
 }
 
 function tratar(d) {
@@ -54,9 +55,15 @@ function criar(d) {
   let total = 0;
   for (const i of d.itens) {
     const preco = PRECOS[i.id] && PRECOS[i.id][i.tamanho];
-    const qtd = Number(i.qtd);
-    if (!preco || !Number.isInteger(qtd) || qtd < 0) return { erro: 'Item inválido: ' + i.id + ' ' + i.tamanho };
-    if (qtd > 0) { itens.push({ id: i.id, tamanho: i.tamanho, qtd: qtd }); total += preco * qtd; }
+    const qtd = Number(i.qtd), latas = Number(i.latas || 0);
+    const latasOk = Number.isInteger(latas) && latas >= 0 && latas <= qtd && (!latas || i.tamanho === '500g');
+    if (!preco || !Number.isInteger(qtd) || qtd < 0 || !latasOk) return { erro: 'Item inválido: ' + i.id + ' ' + i.tamanho };
+    if (qtd > 0) {
+      const item = { id: i.id, tamanho: i.tamanho, qtd: qtd };
+      if (latas) item.latas = latas;
+      itens.push(item);
+      total += preco * qtd + LATA * latas;
+    }
   }
   if (total <= 0) return { erro: 'Pedido vazio' };
 
