@@ -17,18 +17,19 @@ function doPost(e) {
 
 // Diagnóstico: abrir a URL no navegador mostra a versão e os sabores que esta implantação conhece
 function doGet() {
-  return ContentService.createTextOutput(JSON.stringify({ versao: 3, sabores: Object.keys(PRECOS) })).setMimeType(ContentService.MimeType.JSON);
+  return ContentService.createTextOutput(JSON.stringify({ versao: 4, sabores: Object.keys(PRECOS) })).setMimeType(ContentService.MimeType.JSON);
 }
 
 function tratar(d) {
   if (d.acao === 'criar') return comLock(() => criar(d));
   const token = PropertiesService.getScriptProperties().getProperty('ADMIN_TOKEN');
   if (!token || d.token !== token) return { erro: 'Não autorizado' };
-  if (d.acao === 'listar') return { pedidos: lerPedidos() };
+  if (d.acao === 'listar') return { pedidos: lerPedidos(), fornadas: lerFornadas() };
   if (d.acao === 'fornada') return comLock(() => fornada(d));
   if (d.acao === 'status') return comLock(() => mudarStatus(d));
   if (d.acao === 'pago') return comLock(() => mudarPago(d));
   if (d.acao === 'desfazer') return comLock(() => desfazer(d));
+  if (d.acao === 'cancelarFornada') return comLock(() => cancelarFornada(d));
   return { erro: 'Ação inválida' };
 }
 
@@ -121,6 +122,9 @@ function fornada(d) {
     gravar(p, etapa('', p.itens, p.prontos));
     destinos.push({ id: p.id, nome: p.nome, qtd: vai });
   }
+  // Itens registrados juntos (mesmo lote) formam uma fornada, cancelada de uma vez
+  const lote = texto(d.lote || new Date().toISOString()).slice(0, 40);
+  abaFornadas(true).appendRow([lote, new Date(), d.id, d.tamanho, qtd, JSON.stringify(destinos), resta, 'Ativa']);
   return { destinos: destinos, sobra: resta };
 }
 
@@ -142,5 +146,45 @@ function desfazer(d) {
   const p = acharPedido(d.id);
   p.prontos = {};
   gravar(p, parado(p) ? p.etapa : 'Na fila');
+  return { ok: true };
+}
+
+// Aba Fornadas: lote | registradoEm | sabor | tamanho | qtd | destinos | sobra | status
+function abaFornadas(criar) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sh = ss.getSheetByName('Fornadas');
+  if (!sh && criar) {
+    sh = ss.insertSheet('Fornadas');
+    sh.appendRow(['lote', 'registradoEm', 'sabor', 'tamanho', 'qtd', 'destinos', 'sobra', 'status']);
+  }
+  return sh;
+}
+
+function lerFornadas() {
+  const sh = abaFornadas(false);
+  if (!sh) return [];
+  return sh.getDataRange().getValues().slice(1).map((r, n) => ({
+    linha: n + 2, lote: String(r[0]), registradoEm: r[1], id: r[2], tamanho: r[3], qtd: r[4],
+    destinos: JSON.parse(r[5] || '[]'), sobra: r[6], status: r[7]
+  }));
+}
+
+// Tira dos pedidos o que essa fornada tinha dado a eles
+function cancelarFornada(d) {
+  const linhas = lerFornadas().filter(f => f.lote === String(d.lote) && f.status === 'Ativa');
+  if (!linhas.length) return { erro: 'Fornada não encontrada ou já cancelada' };
+  const pedidos = lerPedidos();
+  const mudou = [];
+  for (const f of linhas) {
+    const chave = f.id + '|' + f.tamanho;
+    for (const dest of f.destinos) {
+      const p = pedidos.find(p => p.id === dest.id);
+      if (!p) continue;
+      p.prontos[chave] = Math.max(0, (p.prontos[chave] || 0) - dest.qtd);
+      if (mudou.indexOf(p) < 0) mudou.push(p);
+    }
+    abaFornadas(false).getRange(f.linha, 8).setValue('Cancelada');
+  }
+  mudou.forEach(p => gravar(p, parado(p) ? p.etapa : etapa('', p.itens, p.prontos)));
   return { ok: true };
 }

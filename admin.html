@@ -23,7 +23,8 @@
 
   <div id="painel" hidden>
     <div class="acoes"><button id="atualizar">Atualizar</button><button id="sair">Sair</button></div>
-    <div class="card" id="totais"></div>
+    <section id="prontos" class="card" hidden></section>
+    <section id="proxima" class="card"></section>
     <form id="fornada" class="card">
       <h2>Saiu da fornada</h2>
       <p class="muted">Preencha só o que saiu.</p>
@@ -31,11 +32,13 @@
       <button class="principal" id="fEnviar">Registrar e ver para quem vai</button>
       <div id="fResultado" role="status"></div>
     </form>
+    <details id="historico" class="card"><summary id="hResumo">Fornadas registradas</summary><div id="hLista"></div></details>
+    <div class="card" id="totais"></div>
     <label for="filtro">Mostrar</label>
     <select id="filtro">
       <option value="">Todos</option>
       <option value="fila">Próximos da fila</option>
-      <option>Na fila</option><option>Fazendo</option><option>Pronto pra entrega</option>
+      <option>Fazendo</option><option>Pronto pra entrega</option>
       <hr>
       <option value="cobrar">Falta cobrar</option>
       <option>Enviado</option>
@@ -56,7 +59,16 @@ const produto = id => CONFIG.produtos.find(p => p.id === id) || { nome: id };
 const nomeItem = (id, tamanho) => `${esc(produto(id).nome)} ${esc(tamanho.replace('g', ' g'))}`;
 const ativo = p => !['Apagado', 'Cancelado', 'Enviado'].includes(p.etapa);
 const conta = p => p.etapa !== 'Cancelado' && p.etapa !== 'Apagado'; // entra nos totais de dinheiro
-let pedidos = [];
+let pedidos = [], fornadas = [];
+const pronto = (p, i) => Math.min(i.qtd, p.prontos[i.id + '|' + i.tamanho] || 0);
+const whats = p => `<a href="https://wa.me/55${esc(p.whatsapp.replace(/\D/g, ''))}" target="_blank" rel="noopener">WhatsApp</a>`;
+// Pedido pela metade: o que já saiu fica apagado, o que falta fica em destaque
+const itensHtml = p => p.itens.map(i => {
+  const ok = pronto(p, i), falta = i.qtd - ok, nome = `${i.qtd}× ${nomeItem(i.id, i.tamanho)}`;
+  if (p.etapa !== 'Fazendo') return nome;
+  if (!falta) return `<span class="item-ok">✓ ${nome} pronto</span>`;
+  return `<span class="item-falta">${nome}: falta ${falta}</span>${ok ? ` <span class="item-ok">(${ok} pronto)</span>` : ''}`;
+}).join('<br>');
 
 const api = d => fetch(CONFIG.apiUrl, { method: 'POST', body: JSON.stringify({ ...d, token: localStorage.getItem('token') }) }).then(r => r.json());
 
@@ -69,6 +81,7 @@ async function carregar() {
     if (r.erro === 'Não autorizado') { sair(); return $('erro').textContent = 'Senha incorreta'; }
     if (r.erro) throw new Error(r.erro);
     pedidos = r.pedidos;
+    fornadas = r.fornadas || [];
     $('login').hidden = true;
     $('painel').hidden = false;
     render();
@@ -77,20 +90,53 @@ async function carregar() {
 }
 
 function render() {
-  const soma = cond => pedidos.filter(p => conta(p) && cond(p)).reduce((s, p) => s + Number(p.total), 0);
-  const falta = {};
+  const prontos = pedidos.filter(p => p.etapa === 'Pronto pra entrega');
+  $('prontos').hidden = !prontos.length;
+  $('prontos').innerHTML = `<h2>Prontos para entregar (${prontos.length})</h2>` + prontos.map(p => `
+    <div class="bloco">
+      <div class="linha"><strong>${esc(p.id)} · ${esc(p.nome)}</strong>${p.pago ? '<span>Pago</span>' : '<strong class="erro">Não pago</strong>'}</div>
+      <div>${itensHtml(p)}</div>
+      <div class="acoes"><button data-id="${esc(p.id)}" data-acao="status" data-v="Enviado">Enviado</button>${whats(p)}</div>
+    </div>`).join('');
+
+  // Próxima fornada: tudo o que falta, por sabor e tamanho, na ordem de chegada dos pedidos
+  const sugestao = new Map();
   pedidos.filter(ativo).forEach(p => p.itens.forEach(i => {
-    const k = i.id + '|' + i.tamanho;
-    falta[k] = (falta[k] || 0) + Math.max(0, i.qtd - (p.prontos[k] || 0));
+    const falta = i.qtd - pronto(p, i), k = i.id + '|' + i.tamanho;
+    if (falta <= 0) return;
+    if (!sugestao.has(k)) sugestao.set(k, { id: i.id, tamanho: i.tamanho, qtd: 0, pedidos: [] });
+    const s = sugestao.get(k);
+    s.qtd += falta;
+    s.pedidos.push(`${esc(p.id)} ${esc(p.nome)} (${falta})`);
   }));
-  $('totais').innerHTML = `
-    <p>Recebido: <strong>${brl(soma(p => p.pago))}</strong><br>Falta cobrar: <strong>${brl(soma(p => !p.pago))}</strong></p>
-    <table><tr><th>Falta fazer</th><th>500 g</th><th>250 g</th></tr>
-    ${CONFIG.produtos.map(p => `<tr><td>${p.nome}</td><td>${falta[p.id + '|500g'] || 0}</td><td>${falta[p.id + '|250g'] || 0}</td></tr>`).join('')}
-    </table>`;
+  $('proxima').innerHTML = '<h2>Próxima fornada</h2>' + (sugestao.size
+    ? [...sugestao.values()].map(s => `<p><strong>${s.qtd}× ${nomeItem(s.id, s.tamanho)}</strong><br><span class="muted">${s.pedidos.join(' · ')}</span></p>`).join('') +
+      '<div class="acoes"><button type="button" id="preencher">Preencher fornada com esta sugestão</button></div>'
+    : '<p class="muted">Nada faltando: todos os pedidos já estão prontos.</p>');
+  if (sugestao.size) $('preencher').onclick = () => {
+    $('fItens').querySelectorAll('input').forEach(c => c.value = (sugestao.get(c.dataset.id + '|' + c.dataset.tamanho) || {}).qtd || '');
+    $('fornada').scrollIntoView({ behavior: 'smooth' });
+  };
+
+  // Fornadas: itens registrados juntos (mesmo lote), mais recente primeiro
+  const lotes = new Map();
+  fornadas.forEach(f => lotes.set(f.lote, [...(lotes.get(f.lote) || []), f]));
+  const historico = [...lotes.values()].reverse();
+  $('hResumo').textContent = `Fornadas registradas (${historico.length})`;
+  $('hLista').innerHTML = historico.map(fs => {
+    const cancelada = fs.every(f => f.status === 'Cancelada');
+    return `<div class="bloco${cancelada ? ' cancelada' : ''}">
+      <div class="muted">${new Date(fs[0].registradoEm).toLocaleString('pt-BR')}${cancelada ? ' · Cancelada' : ''}</div>
+      ${fs.map(f => `<div><strong>${f.qtd}× ${nomeItem(f.id, f.tamanho)}</strong> → ${f.destinos.map(d => `${esc(d.id)} ${esc(d.nome)} (${d.qtd})`).join(' · ') || 'nenhum pedido'}${f.sobra ? ` · sobrou ${f.sobra}` : ''}</div>`).join('')}
+      ${cancelada ? '' : `<div class="acoes"><button data-acao="cancelarFornada" data-lote="${esc(fs[0].lote)}">Cancelar fornada</button></div>`}
+    </div>`;
+  }).join('') || '<p class="muted">Nenhuma fornada registrada ainda.</p>';
+
+  const soma = cond => pedidos.filter(p => conta(p) && cond(p)).reduce((s, p) => s + Number(p.total), 0);
+  $('totais').innerHTML = `<p>Recebido: <strong>${brl(soma(p => p.pago))}</strong><br>Falta cobrar: <strong>${brl(soma(p => !p.pago))}</strong></p>`;
 
   const f = $('filtro').value;
-  const faltaNo = p => p.itens.reduce((s, i) => s + Math.max(0, i.qtd - (p.prontos[i.id + '|' + i.tamanho] || 0)), 0);
+  const faltaNo = p => p.itens.reduce((s, i) => s + i.qtd - pronto(p, i), 0);
   const mostra = p => !f ? p.etapa !== 'Apagado' : f === 'cobrar' ? !p.pago && conta(p) : f === 'fila' ? ativo(p) && faltaNo(p) > 0 : p.etapa === f;
   const lista = pedidos.filter(mostra);
   // Fila: mais antigo primeiro, igual à ordem em que a fornada distribui; o resto, mais novo primeiro
@@ -100,10 +146,10 @@ function render() {
     return `
     <div class="card">
       <div class="linha"><strong>${f === 'fila' ? `${n + 1}º · ` : ''}${id} · ${esc(p.nome)}</strong><span>${brl(p.total)}</span></div>
-      ${f === 'fila' ? `<div>Falta: ${p.itens.filter(i => i.qtd > (p.prontos[i.id + '|' + i.tamanho] || 0)).map(i => `${i.qtd - (p.prontos[i.id + '|' + i.tamanho] || 0)}× ${nomeItem(i.id, i.tamanho)}`).join(', ')}</div>` : ''}
+      ${f === 'fila' ? `<div>Falta: ${p.itens.filter(i => i.qtd > pronto(p, i)).map(i => `${i.qtd - pronto(p, i)}× ${nomeItem(i.id, i.tamanho)}`).join(', ')}</div>` : ''}
       <div class="muted">${new Date(p.criadoEm).toLocaleString('pt-BR')}</div>
       <div><strong>${esc(p.etapa)}</strong> · ${p.pago ? 'Pago' : 'Não pago'}</div>
-      <div>${p.itens.map(i => `${i.qtd}× ${nomeItem(i.id, i.tamanho)} <span class="muted">(${Math.min(i.qtd, p.prontos[i.id + '|' + i.tamanho] || 0)} de ${i.qtd} pronto)</span>`).join('<br>')}</div>
+      <div>${itensHtml(p)}</div>
       ${p.obs ? `<div class="muted">Obs: ${esc(p.obs)}</div>` : ''}
       <div class="acoes">${p.etapa === 'Apagado' ? `
         <button data-id="${id}" data-acao="status" data-v="Na fila">Restaurar</button>` : `
@@ -111,7 +157,7 @@ function render() {
         ${ativo(p) ? `<button data-id="${id}" data-acao="status" data-v="Enviado">Enviado</button>
         <button data-id="${id}" data-acao="status" data-v="Cancelado">Cancelar</button>` : `<button data-id="${id}" data-acao="status" data-v="Na fila">Reabrir</button>`}
         ${prontos && ativo(p) ? `<button data-id="${id}" data-acao="desfazer">Desfazer prontos</button>` : ''}
-        <a href="https://wa.me/55${esc(p.whatsapp.replace(/\D/g, ''))}" target="_blank" rel="noopener">WhatsApp</a>
+        ${whats(p)}
         <button data-id="${id}" data-acao="status" data-v="Apagado">Apagar</button>`}
       </div>
     </div>`;
@@ -121,17 +167,18 @@ function render() {
 const confirmar = {
   Cancelado: 'Cancelar este pedido? Se ele tinha panetones prontos, registre-os de novo em "Saiu da fornada" para irem a outro pedido.',
   desfazer: 'Desfazer os prontos deste pedido? Ele volta para a fila.',
-  Apagado: 'Apagar este pedido? Ele some da lista e dos totais. Dá para restaurar no filtro "Apagados".'
+  Apagado: 'Apagar este pedido? Ele some da lista e dos totais. Dá para restaurar no filtro "Apagados".',
+  cancelarFornada: 'Cancelar esta fornada? Os panetones dela saem dos pedidos que os receberam, e esses pedidos voltam para a fila.'
 };
 
-$('lista').onclick = async e => {
+$('painel').onclick = async e => {
   const b = e.target.closest('button[data-acao]');
   if (!b) return;
-  const { id, acao, v } = b.dataset;
+  const { id, acao, v, lote } = b.dataset;
   const pergunta = confirmar[acao === 'status' ? v : acao];
   if (pergunta && !confirm(pergunta)) return;
   b.disabled = true;
-  const dados = acao === 'pago' ? { pago: v === 'true' } : acao === 'status' ? { status: v } : {};
+  const dados = acao === 'pago' ? { pago: v === 'true' } : acao === 'status' ? { status: v } : acao === 'cancelarFornada' ? { lote } : {};
   const r = await api({ acao, id, ...dados }).catch(err => ({ erro: err.message }));
   if (r.erro) { $('erro').textContent = 'Erro: ' + r.erro; b.disabled = false; return; }
   carregar();
@@ -149,9 +196,10 @@ $('fornada').onsubmit = async e => {
   $('fEnviar').disabled = true;
   $('fResultado').textContent = 'Registrando…';
   let html = '';
+  const lote = new Date().toISOString(); // agrupa os itens desta fornada
   for (const c of campos) {
     const item = { id: c.dataset.id, tamanho: c.dataset.tamanho, qtd: Number(c.value) };
-    const r = await api({ acao: 'fornada', ...item }).catch(err => ({ erro: err.message }));
+    const r = await api({ acao: 'fornada', lote, ...item }).catch(err => ({ erro: err.message }));
     if (r.erro) { html += `<p class="erro">Erro em ${nomeItem(item.id, item.tamanho)}: ${esc(r.erro)}. Os itens acima foram registrados; confira e tente de novo só os que faltaram.</p>`; break; }
     c.value = '';
     html += `<p><strong>${item.qtd}× ${nomeItem(item.id, item.tamanho)}</strong></p>` +
