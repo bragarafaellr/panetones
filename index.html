@@ -67,7 +67,7 @@
 <script>
 const $ = id => document.getElementById(id);
 const brl = v => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-const qtd = {}; // 'id|tamanho' -> quantidade
+const qtd = {}; // 'id|tamanho' -> quantidade; 'id|500g|lata' -> quantos desses vão em lata
 
 // Galeria passa sozinha; pausa alguns segundos depois de um toque
 const galeria = document.querySelector('.galeria');
@@ -82,13 +82,15 @@ if (!matchMedia('(prefers-reduced-motion: reduce)').matches) setInterval(() => {
 }, 3000);
 
 function itensDoPedido() {
-  return Object.entries(qtd).filter(([, q]) => q > 0).map(([k, q]) => {
+  return Object.entries(qtd).filter(([k, q]) => q > 0 && !k.endsWith('|lata')).map(([k, q]) => {
     const [id, tamanho] = k.split('|');
-    return { id, tamanho, qtd: q };
+    const latas = qtd[k + '|lata'] || 0;
+    return latas ? { id, tamanho, qtd: q, latas } : { id, tamanho, qtd: q };
   });
 }
 const preco = i => CONFIG.produtos.find(p => p.id === i.id).precos[i.tamanho];
-const nomeItem = i => `${CONFIG.produtos.find(p => p.id === i.id).nome} ${i.tamanho.replace('g', ' g')}`;
+const nomeItem = i => `${CONFIG.produtos.find(p => p.id === i.id).nome} ${i.tamanho.replace('g', ' g')}${i.latas ? ` (${i.latas} em lata)` : ''}`;
+const precoItem = i => preco(i) * i.qtd + (i.latas || 0) * CONFIG.lata;
 
 if (Date.now() > new Date(CONFIG.dataLimite)) {
   $('sub').textContent = 'Pedidos encerrados';
@@ -102,7 +104,13 @@ if (Date.now() > new Date(CONFIG.dataLimite)) {
             <button type="button" data-k="${p.id}|${t}" data-d="-1" aria-label="Menos ${p.nome} ${t}">−</button>
             <span id="q-${p.id}|${t}">0</span>
             <button type="button" data-k="${p.id}|${t}" data-d="1" aria-label="Mais ${p.nome} ${t}">+</button>
-          </span></div>`).join('')}
+          </span></div>${t === '500g' ? `
+        <div class="linha lata"><span>↳ em lata (embalagem especial) · + ${brl(CONFIG.lata)}</span>
+          <span class="stepper">
+            <button type="button" data-k="${p.id}|500g|lata" data-d="-1" aria-label="Menos lata ${p.nome} 500g">−</button>
+            <span id="q-${p.id}|500g|lata">0</span>
+            <button type="button" data-k="${p.id}|500g|lata" data-d="1" aria-label="Mais lata ${p.nome} 500g">+</button>
+          </span></div>` : ''}`).join('')}
     </div>`).join('');
 }
 
@@ -111,8 +119,11 @@ $('produtos').onclick = e => {
   if (!b) return;
   const k = b.dataset.k;
   qtd[k] = Math.max(0, (qtd[k] || 0) + Number(b.dataset.d));
-  $('q-' + k).textContent = qtd[k];
-  const total = itensDoPedido().reduce((s, i) => s + preco(i) * i.qtd, 0);
+  // No máximo uma lata por panetone de 500 g daquele sabor
+  const base = k.replace('|lata', ''), lata = base + '|lata';
+  if (qtd[lata] > (qtd[base] || 0)) qtd[lata] = qtd[base] || 0;
+  [base, lata].forEach(x => { const el = $('q-' + x); if (el) el.textContent = qtd[x] || 0; });
+  const total = itensDoPedido().reduce((s, i) => s + precoItem(i), 0);
   $('total').textContent = brl(total);
   $('continuar').disabled = total === 0;
 };
@@ -153,7 +164,7 @@ function mostrarPagamento(id, total, itens) {
   $('pagamento').hidden = false;
   $('pedidoId').textContent = id;
   $('pedidoTotal').textContent = brl(total);
-  $('resumo').innerHTML = itens.map(i => `<div class="linha"><span>${i.qtd}× ${nomeItem(i)}</span><span>${brl(preco(i) * i.qtd)}</span></div>`).join('');
+  $('resumo').innerHTML = itens.map(i => `<div class="linha"><span>${i.qtd}× ${nomeItem(i)}</span><span>${brl(precoItem(i))}</span></div>`).join('');
   $('comprovante').href = `https://wa.me/${CONFIG.whatsappComprovante}?text=${encodeURIComponent('Comprovante do pedido ' + id)}`;
   if (CONFIG.pix.chave === 'TODO_CHAVE_PIX') {
     $('qr').classList.add('vazio');

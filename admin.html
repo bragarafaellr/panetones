@@ -64,7 +64,7 @@ const pronto = (p, i) => Math.min(i.qtd, p.prontos[i.id + '|' + i.tamanho] || 0)
 const whats = p => `<a href="https://wa.me/55${esc(p.whatsapp.replace(/\D/g, ''))}" target="_blank" rel="noopener">WhatsApp</a>`;
 // Pedido pela metade: o que já saiu fica apagado, o que falta fica em destaque
 const itensHtml = p => p.itens.map(i => {
-  const ok = pronto(p, i), falta = i.qtd - ok, nome = `${i.qtd}× ${nomeItem(i.id, i.tamanho)}`;
+  const ok = pronto(p, i), falta = i.qtd - ok, nome = `${i.qtd}× ${nomeItem(i.id, i.tamanho)}${i.latas ? ` (${i.latas} em lata)` : ''}`;
   if (p.etapa !== 'Fazendo') return nome;
   if (!falta) return `<span class="item-ok">✓ ${nome} pronto</span>`;
   return `<span class="item-falta">${nome}: falta ${falta}</span>${ok ? ` <span class="item-ok">(${ok} pronto)</span>` : ''}`;

@@ -34,3 +34,4 @@ td, th { padding: 4px; text-align: left; }
 .bloco { border-top: 1px solid #eee; padding-top: 10px; margin-top: 10px; }
 .bloco.cancelada { opacity: .5; text-decoration: line-through; }
 details > summary { cursor: pointer; font-weight: 700; }
+.linha.lata { padding-left: 12px; font-size: .9rem; color: #666; }

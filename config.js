@@ -6,6 +6,7 @@ const CONFIG = {
     { id: 'presunto-queijo', nome: 'Presunto e queijo', precos: { '500g': 115, '250g': 69 } },
     { id: 'goiabada-requeijao', nome: 'Goiabada com requeijão', precos: { '500g': 95, '250g': 57 } }
   ],
+  lata: 30, // embalagem especial opcional, só para 500 g (deve bater com Code.gs)
   pix: {
     chave: 'd253657f-5c6a-4140-a336-0b42dc2f9b10', // chave aleatória
     nome: 'COLOCAR_NOME_TITULAR',   // máx. 25 chars, sem acento
