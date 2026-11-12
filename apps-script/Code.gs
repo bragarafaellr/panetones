@@ -7,7 +7,7 @@ const PRECOS = {
 };
 const LATA = 30; // embalagem especial opcional, só para 500 g; deve bater com config.js
 const DATA_LIMITE = new Date('2026-12-19T23:59:59-03:00');
-// Colunas: A id | B criadoEm | C nome | D whatsapp | E itens | F total | G obs | H status | I atualizadoEm | J prontos | K pago
+// Colunas: A id | B criadoEm | C nome | D whatsapp | E itens | F total | G obs | H status | I atualizadoEm | J prontos | K pago | L espera
 
 function doPost(e) {
   let r;
@@ -18,7 +18,7 @@ function doPost(e) {
 
 // Diagnóstico: abrir a URL no navegador mostra a versão e os sabores que esta implantação conhece
 function doGet() {
-  return ContentService.createTextOutput(JSON.stringify({ versao: 5, sabores: Object.keys(PRECOS) })).setMimeType(ContentService.MimeType.JSON);
+  return ContentService.createTextOutput(JSON.stringify({ versao: 6, sabores: Object.keys(PRECOS) })).setMimeType(ContentService.MimeType.JSON);
 }
 
 function tratar(d) {
@@ -29,6 +29,7 @@ function tratar(d) {
   if (d.acao === 'fornada') return comLock(() => fornada(d));
   if (d.acao === 'status') return comLock(() => mudarStatus(d));
   if (d.acao === 'pago') return comLock(() => mudarPago(d));
+  if (d.acao === 'espera') return comLock(() => mudarEspera(d));
   if (d.acao === 'desfazer') return comLock(() => desfazer(d));
   if (d.acao === 'cancelarFornada') return comLock(() => cancelarFornada(d));
   return { erro: 'Ação inválida' };
@@ -75,17 +76,17 @@ function criar(d) {
   return { id: id, total: total };
 }
 
-// Etapa: Apagado/Cancelado/Enviado são marcados à mão; o resto sai do que já está pronto
+// Etapa: Apagado/Cancelado/Entregue são marcados à mão; o resto sai do que já está pronto
 function etapa(status, itens, prontos) {
   if (status === 'Apagado' || status === 'Cancelado') return status;
-  if (status === 'Enviado' || status === 'Entregue') return 'Enviado';
+  if (status === 'Entregue' || status === 'Enviado') return 'Entregue'; // "Enviado" era o nome antigo
   const pedidos = itens.reduce((s, i) => s + i.qtd, 0);
   const feitos = itens.reduce((s, i) => s + Math.min(i.qtd, prontos[i.id + '|' + i.tamanho] || 0), 0);
   return feitos === 0 ? 'Na fila' : feitos < pedidos ? 'Fazendo' : 'Pronto pra entrega';
 }
 
 // Pedidos fora da fila de produção
-function parado(p) { return ['Apagado', 'Cancelado', 'Enviado'].indexOf(p.etapa) >= 0; }
+function parado(p) { return ['Apagado', 'Cancelado', 'Entregue'].indexOf(p.etapa) >= 0; }
 
 function lerPedidos() {
   return aba().getDataRange().getValues().slice(1).map((r, n) => {
@@ -95,7 +96,8 @@ function lerPedidos() {
     const pago = r[10] ? r[10] === 'Sim' : (r[7] === 'Pago' || r[7] === 'Entregue');
     return {
       linha: n + 2, id: r[0], criadoEm: r[1], nome: r[2], whatsapp: String(r[3]), itens: itens,
-      total: r[5], obs: r[6], etapa: etapa(r[7], itens, prontos), atualizadoEm: r[8], prontos: prontos, pago: pago
+      total: r[5], obs: r[6], etapa: etapa(r[7], itens, prontos), atualizadoEm: r[8], prontos: prontos, pago: pago,
+      espera: r[11] === 'Sim' // na espera: entrega mais para frente, não recebe fornada por enquanto
     };
   });
 }
@@ -119,7 +121,7 @@ function fornada(d) {
   const destinos = [];
   for (const p of lerPedidos()) {
     if (!resta) break;
-    if (parado(p)) continue;
+    if (parado(p) || p.espera) continue;
     const pedido = p.itens.filter(i => i.id === d.id && i.tamanho === d.tamanho).reduce((s, i) => s + i.qtd, 0);
     const falta = pedido - (p.prontos[chave] || 0);
     if (falta <= 0) continue;
@@ -136,15 +138,23 @@ function fornada(d) {
 }
 
 function mudarStatus(d) {
-  if (['Enviado', 'Cancelado', 'Apagado', 'Na fila'].indexOf(d.status) < 0) return { erro: 'Status inválido' };
+  const status = d.status === 'Enviado' ? 'Entregue' : d.status; // painel antigo ainda em cache
+  if (['Entregue', 'Cancelado', 'Apagado', 'Na fila'].indexOf(status) < 0) return { erro: 'Status inválido' };
   const p = acharPedido(d.id);
-  gravar(p, d.status === 'Na fila' ? etapa('', p.itens, p.prontos) : d.status);
+  gravar(p, status === 'Na fila' ? etapa('', p.itens, p.prontos) : status);
   return { ok: true };
 }
 
 function mudarPago(d) {
   const p = acharPedido(d.id);
   aba().getRange(p.linha, 11).setValue(d.pago ? 'Sim' : 'Não');
+  aba().getRange(p.linha, 9).setValue(new Date());
+  return { ok: true };
+}
+
+function mudarEspera(d) {
+  const p = acharPedido(d.id);
+  aba().getRange(p.linha, 12).setValue(d.espera ? 'Sim' : '');
   aba().getRange(p.linha, 9).setValue(new Date());
   return { ok: true };
 }
