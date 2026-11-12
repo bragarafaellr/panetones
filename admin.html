@@ -41,7 +41,8 @@
       <option>Fazendo</option><option>Pronto pra entrega</option>
       <hr>
       <option value="cobrar">Falta cobrar</option>
-      <option>Enviado</option>
+      <option value="espera">Na espera</option>
+      <option>Entregue</option>
       <hr>
       <option>Cancelado</option>
       <option value="Apagado">Apagados</option>
@@ -57,7 +58,8 @@ const brl = v => Number(v).toLocaleString('pt-BR', { style: 'currency', currency
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
 const produto = id => CONFIG.produtos.find(p => p.id === id) || { nome: id };
 const nomeItem = (id, tamanho) => `${esc(produto(id).nome)} ${esc(tamanho.replace('g', ' g'))}`;
-const ativo = p => !['Apagado', 'Cancelado', 'Enviado'].includes(p.etapa);
+const ativo = p => !['Apagado', 'Cancelado', 'Entregue'].includes(p.etapa);
+const naFila = p => ativo(p) && !p.espera; // na espera: entrega mais para frente, fora das fornadas
 const conta = p => p.etapa !== 'Cancelado' && p.etapa !== 'Apagado'; // entra nos totais de dinheiro
 let pedidos = [], fornadas = [];
 const pronto = (p, i) => Math.min(i.qtd, p.prontos[i.id + '|' + i.tamanho] || 0);
@@ -90,18 +92,18 @@ async function carregar() {
 }
 
 function render() {
-  const prontos = pedidos.filter(p => p.etapa === 'Pronto pra entrega');
+  const prontos = pedidos.filter(p => p.etapa === 'Pronto pra entrega' && !p.espera);
   $('prontos').hidden = !prontos.length;
   $('prontos').innerHTML = `<h2>Prontos para entregar (${prontos.length})</h2>` + prontos.map(p => `
     <div class="bloco">
       <div class="linha"><strong>${esc(p.id)} · ${esc(p.nome)}</strong>${p.pago ? '<span>Pago</span>' : '<strong class="erro">Não pago</strong>'}</div>
       <div>${itensHtml(p)}</div>
-      <div class="acoes"><button data-id="${esc(p.id)}" data-acao="status" data-v="Enviado">Enviado</button>${whats(p)}</div>
+      <div class="acoes"><button data-id="${esc(p.id)}" data-acao="status" data-v="Entregue">Entregue</button>${whats(p)}</div>
     </div>`).join('');
 
   // Próxima fornada: tudo o que falta, por sabor e tamanho, na ordem de chegada dos pedidos
   const sugestao = new Map();
-  pedidos.filter(ativo).forEach(p => p.itens.forEach(i => {
+  pedidos.filter(naFila).forEach(p => p.itens.forEach(i => {
     const falta = i.qtd - pronto(p, i), k = i.id + '|' + i.tamanho;
     if (falta <= 0) return;
     if (!sugestao.has(k)) sugestao.set(k, { id: i.id, tamanho: i.tamanho, qtd: 0, pedidos: [] });
@@ -137,7 +139,7 @@ function render() {
 
   const f = $('filtro').value;
   const faltaNo = p => p.itens.reduce((s, i) => s + i.qtd - pronto(p, i), 0);
-  const mostra = p => !f ? p.etapa !== 'Apagado' : f === 'cobrar' ? !p.pago && conta(p) : f === 'fila' ? ativo(p) && faltaNo(p) > 0 : p.etapa === f;
+  const mostra = p => !f ? p.etapa !== 'Apagado' : f === 'cobrar' ? !p.pago && conta(p) : f === 'fila' ? naFila(p) && faltaNo(p) > 0 : f === 'espera' ? p.espera && p.etapa !== 'Apagado' : p.etapa === f;
   const lista = pedidos.filter(mostra);
   // Fila: mais antigo primeiro, igual à ordem em que a fornada distribui; o resto, mais novo primeiro
   $('lista').innerHTML = (f === 'fila' ? lista : lista.reverse()).map((p, n) => {
@@ -148,13 +150,14 @@ function render() {
       <div class="linha"><strong>${f === 'fila' ? `${n + 1}º · ` : ''}${id} · ${esc(p.nome)}</strong><span>${brl(p.total)}</span></div>
       ${f === 'fila' ? `<div>Falta: ${p.itens.filter(i => i.qtd > pronto(p, i)).map(i => `${i.qtd - pronto(p, i)}× ${nomeItem(i.id, i.tamanho)}`).join(', ')}</div>` : ''}
       <div class="muted">${new Date(p.criadoEm).toLocaleString('pt-BR')}</div>
-      <div><strong>${esc(p.etapa)}</strong> · ${p.pago ? 'Pago' : 'Não pago'}</div>
+      <div><strong>${esc(p.etapa)}</strong> · ${p.pago ? 'Pago' : 'Não pago'}${p.espera ? ' · <strong class="espera">⏸ Na espera</strong>' : ''}</div>
       <div>${itensHtml(p)}</div>
       ${p.obs ? `<div class="muted">Obs: ${esc(p.obs)}</div>` : ''}
       <div class="acoes">${p.etapa === 'Apagado' ? `
         <button data-id="${id}" data-acao="status" data-v="Na fila">Restaurar</button>` : `
         <button data-id="${id}" data-acao="pago" data-v="${!p.pago}" class="${p.pago ? 'on' : ''}" aria-pressed="${p.pago}">${p.pago ? 'Pago' : 'Não pago'}</button>
-        ${ativo(p) ? `<button data-id="${id}" data-acao="status" data-v="Enviado">Enviado</button>
+        ${ativo(p) ? `<button data-id="${id}" data-acao="espera" data-v="${!p.espera}" class="${p.espera ? 'on-espera' : ''}" aria-pressed="${!!p.espera}">${p.espera ? 'Tirar da espera' : 'Pôr na espera'}</button>
+        <button data-id="${id}" data-acao="status" data-v="Entregue">Entregue</button>
         <button data-id="${id}" data-acao="status" data-v="Cancelado">Cancelar</button>` : `<button data-id="${id}" data-acao="status" data-v="Na fila">Reabrir</button>`}
         ${prontos && ativo(p) ? `<button data-id="${id}" data-acao="desfazer">Desfazer prontos</button>` : ''}
         ${whats(p)}
@@ -178,7 +181,7 @@ $('painel').onclick = async e => {
   const pergunta = confirmar[acao === 'status' ? v : acao];
   if (pergunta && !confirm(pergunta)) return;
   b.disabled = true;
-  const dados = acao === 'pago' ? { pago: v === 'true' } : acao === 'status' ? { status: v } : acao === 'cancelarFornada' ? { lote } : {};
+  const dados = acao === 'pago' ? { pago: v === 'true' } : acao === 'espera' ? { espera: v === 'true' } : acao === 'status' ? { status: v } : acao === 'cancelarFornada' ? { lote } : {};
   const r = await api({ acao, id, ...dados }).catch(err => ({ erro: err.message }));
   if (r.erro) { $('erro').textContent = 'Erro: ' + r.erro; b.disabled = false; return; }
   carregar();

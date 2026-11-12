@@ -35,3 +35,5 @@ td, th { padding: 4px; text-align: left; }
 .bloco.cancelada { opacity: .5; text-decoration: line-through; }
 details > summary { cursor: pointer; font-weight: 700; }
 .linha.lata { padding-left: 12px; font-size: .9rem; color: #666; }
+.espera { color: #8a5a00; }
+.acoes button.on-espera { background: #fff4d6; border-color: #e0b44a; }
