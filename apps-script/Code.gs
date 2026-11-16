@@ -16,16 +16,20 @@ function doPost(e) {
   return ContentService.createTextOutput(JSON.stringify(r)).setMimeType(ContentService.MimeType.JSON);
 }
 
-// Diagnóstico: abrir a URL no navegador mostra a versão e os sabores que esta implantação conhece
+// Público: a loja lê daqui se o aviso está ligado; abrir a URL no navegador também mostra a versão e os sabores
 function doGet() {
-  return ContentService.createTextOutput(JSON.stringify({ versao: 6, sabores: Object.keys(PRECOS) })).setMimeType(ContentService.MimeType.JSON);
+  return ContentService.createTextOutput(JSON.stringify({ versao: 7, sabores: Object.keys(PRECOS), aviso: avisoLigado() })).setMimeType(ContentService.MimeType.JSON);
 }
+
+// Aviso "padeiro viajando" na loja, ligado/desligado pelo painel
+function avisoLigado() { return PropertiesService.getScriptProperties().getProperty('AVISO_VIAGEM') === 'sim'; }
 
 function tratar(d) {
   if (d.acao === 'criar') return comLock(() => criar(d));
   const token = PropertiesService.getScriptProperties().getProperty('ADMIN_TOKEN');
   if (!token || d.token !== token) return { erro: 'Não autorizado' };
-  if (d.acao === 'listar') return { pedidos: lerPedidos(), fornadas: lerFornadas() };
+  if (d.acao === 'listar') return { pedidos: lerPedidos(), fornadas: lerFornadas(), aviso: avisoLigado() };
+  if (d.acao === 'aviso') { PropertiesService.getScriptProperties().setProperty('AVISO_VIAGEM', d.aviso ? 'sim' : 'nao'); return { ok: true }; }
   if (d.acao === 'fornada') return comLock(() => fornada(d));
   if (d.acao === 'status') return comLock(() => mudarStatus(d));
   if (d.acao === 'pago') return comLock(() => mudarPago(d));
