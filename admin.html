@@ -23,6 +23,7 @@
 
   <div id="painel" hidden>
     <div class="acoes"><button id="atualizar">Atualizar</button><button id="sair">Sair</button></div>
+    <section id="avisoCard" class="card"></section>
     <section id="prontos" class="card" hidden></section>
     <section id="proxima" class="card"></section>
     <form id="fornada" class="card">
@@ -61,7 +62,7 @@ const nomeItem = (id, tamanho) => `${esc(produto(id).nome)} ${esc(tamanho.replac
 const ativo = p => !['Apagado', 'Cancelado', 'Entregue'].includes(p.etapa);
 const naFila = p => ativo(p) && !p.espera; // na espera: entrega mais para frente, fora das fornadas
 const conta = p => p.etapa !== 'Cancelado' && p.etapa !== 'Apagado'; // entra nos totais de dinheiro
-let pedidos = [], fornadas = [];
+let pedidos = [], fornadas = [], aviso = false;
 const pronto = (p, i) => Math.min(i.qtd, p.prontos[i.id + '|' + i.tamanho] || 0);
 const whats = p => `<a href="https://wa.me/55${esc(p.whatsapp.replace(/\D/g, ''))}" target="_blank" rel="noopener">WhatsApp</a>`;
 // Pedido pela metade: o que já saiu fica apagado, o que falta fica em destaque
@@ -84,6 +85,7 @@ async function carregar() {
     if (r.erro) throw new Error(r.erro);
     pedidos = r.pedidos;
     fornadas = r.fornadas || [];
+    aviso = !!r.aviso;
     $('login').hidden = true;
     $('painel').hidden = false;
     render();
@@ -92,6 +94,9 @@ async function carregar() {
 }
 
 function render() {
+  $('avisoCard').innerHTML = `<div class="linha"><span><strong>Aviso na loja:</strong> padeiro viajando<br><span class="muted">${aviso ? 'Ligado: a loja mostra o aviso natalino' : 'Desligado'}</span></span>
+    <span class="acoes"><button data-acao="aviso" data-v="${!aviso}" class="${aviso ? 'on-espera' : ''}" aria-pressed="${aviso}">${aviso ? 'Desligar' : 'Ligar'}</button></span></div>`;
+
   const prontos = pedidos.filter(p => p.etapa === 'Pronto pra entrega' && !p.espera);
   $('prontos').hidden = !prontos.length;
   $('prontos').innerHTML = `<h2>Prontos para entregar (${prontos.length})</h2>` + prontos.map(p => `
@@ -181,7 +186,7 @@ $('painel').onclick = async e => {
   const pergunta = confirmar[acao === 'status' ? v : acao];
   if (pergunta && !confirm(pergunta)) return;
   b.disabled = true;
-  const dados = acao === 'pago' ? { pago: v === 'true' } : acao === 'espera' ? { espera: v === 'true' } : acao === 'status' ? { status: v } : acao === 'cancelarFornada' ? { lote } : {};
+  const dados = acao === 'pago' ? { pago: v === 'true' } : acao === 'espera' || acao === 'aviso' ? { [acao]: v === 'true' } : acao === 'status' ? { status: v } : acao === 'cancelarFornada' ? { lote } : {};
   const r = await api({ acao, id, ...dados }).catch(err => ({ erro: err.message }));
   if (r.erro) { $('erro').textContent = 'Erro: ' + r.erro; b.disabled = false; return; }
   carregar();
