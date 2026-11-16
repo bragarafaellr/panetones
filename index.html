@@ -34,6 +34,9 @@
   <div id="loja">
     <div id="produtos"></div>
 
+    <aside id="lateral">
+    <h2 class="so-desktop">Seu pedido</h2>
+    <div id="escolhidos" class="so-desktop"><p class="muted">Escolha seus panetones ao lado.</p></div>
     <form id="form" class="card" hidden>
       <h2>Seus dados</h2>
       <label for="nome">Nome</label>
@@ -44,23 +47,27 @@
       <textarea id="obs" rows="2"></textarea>
       <p id="erro" class="erro" role="alert"></p>
     </form>
+    <div class="rodape" id="rodape">
+      <div><strong id="total">R$ 0,00</strong><button class="principal" id="continuar" disabled>Continuar</button></div>
+    </div>
+    </aside>
   </div>
 
   <div id="pagamento" class="card" hidden>
+    <div>
     <h2>Pedido <span id="pedidoId"></span></h2>
     <div id="resumo"></div>
     <p><strong>Total: <span id="pedidoTotal"></span></strong></p>
     <p id="aviso" class="aviso" role="status" hidden>🦌 <strong>Ho-ho-hold on!</strong> Aviso do Polo Norte: o padeiro saiu para entregar presentes com o Papai Noel e volta já. As entregas podem demorar um pouco mais que o normal, mas seu pedido já foi anotado pelos duendes, e o panetone chega quentinho de carinho! 🎄</p>
+    </div>
+    <div>
     <p>Pague com PIX:</p>
     <div id="qr" class="qr"></div>
     <button class="principal" id="copiar">Copiar código PIX</button>
     <a class="principal" id="comprovante" target="_blank" rel="noopener">Enviar comprovante no WhatsApp</a>
+    </div>
   </div>
 </main>
-
-<div class="rodape" id="rodape">
-  <div><strong id="total">R$ 0,00</strong><button class="principal" id="continuar" disabled>Continuar</button></div>
-</div>
 
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script src="config.js"></script>
@@ -128,11 +135,15 @@ $('produtos').onclick = e => {
   const base = k.replace('|lata', ''), lata = base + '|lata';
   if (qtd[lata] > (qtd[base] || 0)) qtd[lata] = qtd[base] || 0;
   [base, lata].forEach(x => { const el = $('q-' + x); if (el) el.textContent = qtd[x] || 0; });
-  const total = itensDoPedido().reduce((s, i) => s + precoItem(i), 0);
+  const itens = itensDoPedido(), total = itens.reduce((s, i) => s + precoItem(i), 0);
+  $('escolhidos').innerHTML = itens.map(i => `<div class="linha"><span>${i.qtd}× ${nomeItem(i)}</span><span>${brl(precoItem(i))}</span></div>`).join('') || '<p class="muted">Escolha seus panetones ao lado.</p>';
   $('total').textContent = brl(total);
   $('continuar').disabled = total === 0;
   $('recado-frutas').hidden = !((qtd['frutas|500g'] || 0) + (qtd['frutas|250g'] || 0));
 };
+
+// Computador (900 px ou mais): o formulário fica sempre aberto na coluna "Seu pedido"
+if (matchMedia('(min-width: 900px)').matches) { $('form').hidden = false; $('continuar').textContent = 'Enviar pedido'; }
 
 $('continuar').onclick = () => {
   if (!$('form').hidden) return $('form').requestSubmit();

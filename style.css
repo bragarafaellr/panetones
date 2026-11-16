@@ -39,3 +39,27 @@ details > summary { cursor: pointer; font-weight: 700; }
 .acoes button.on-espera { background: #fff4d6; border-color: #e0b44a; }
 .aviso { background: #fff4d6; border: 2px dashed #c0392b; border-radius: 12px; padding: 12px 14px; }
 .recado { display: block; width: 100%; height: auto; border-radius: 10px; margin-top: 10px; }
+
+/* Computador e iPad na horizontal: layout de tela cheia. Abaixo de 900 px fica o layout de celular acima. */
+.so-desktop { display: none; }
+@media (min-width: 900px) {
+  main { max-width: 1600px; padding: 24px 32px 48px; }
+  h1 { font-size: 2rem; }
+  .so-desktop { display: block; }
+  .galeria img { height: 340px; }
+  /* Loja: sabores em grade e coluna "Seu pedido" fixa ao lado */
+  #loja { display: grid; grid-template-columns: 1fr 380px; gap: 24px; align-items: start; }
+  #produtos { display: grid; grid-template-columns: repeat(auto-fill, minmax(max(280px, calc(50% - 8px)), 1fr)); gap: 0 16px; align-items: start; } /* no máximo 2 por linha */
+  #escolhidos { margin-bottom: 12px; }
+  .recado { max-width: 360px; }
+  #lateral { position: sticky; top: 16px; margin-top: 12px; background: #fff; border-radius: 12px; padding: 16px; box-shadow: 0 1px 3px #0001; }
+  #lateral .card { margin: 0; padding: 0; box-shadow: none; }
+  #lateral .rodape { position: static; box-shadow: none; border-top: 1px solid #eee; margin-top: 12px; }
+  #lateral .rodape div { padding: 12px 0 0; max-width: none; }
+  #pagamento { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; max-width: 1000px; margin: 12px auto; }
+  /* Painel: produção à esquerda, pedidos em grade à direita */
+  #login { max-width: 420px; }
+  .colunas { display: grid; grid-template-columns: 440px 1fr; gap: 24px; align-items: start; }
+  #lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; margin-top: 12px; }
+  #lista .card { margin: 0; }
+}
