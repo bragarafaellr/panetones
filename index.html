@@ -13,6 +13,7 @@
 <main>
   <h1>Panetones do Rogerio</h1>
   <p id="sub">Panetones caseiros. Todo o lucro vai para a CUFA (Central Única das Favelas). Pedidos até 19/12.</p>
+  <p id="aviso" class="aviso" role="status" hidden>🦌 <strong>Ho-ho-hold on!</strong> Aviso do Polo Norte: o padeiro saiu para entregar presentes com o Papai Noel e volta já. As entregas podem demorar um pouco mais que o normal, mas os pedidos continuam abertos: os duendes estão anotando tudo, e o panetone chega quentinho de carinho! 🎄</p>
 
   <div class="galeria">
     <img src="fotos/1.jpg" width="666" height="1000" alt="Panetone de chocolate visto de lado" loading="lazy">
@@ -69,6 +70,9 @@ const $ = id => document.getElementById(id);
 const brl = v => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const qtd = {}; // 'id|tamanho' -> quantidade; 'id|500g|lata' -> quantos desses vão em lata
 
+// Aviso "padeiro viajando": ligado/desligado pelo painel; se o script não responder, a loja segue sem a faixa
+fetch(CONFIG.apiUrl).then(r => r.json()).then(d => { $('aviso').hidden = !d.aviso; }).catch(() => {});
+
 // Galeria passa sozinha; pausa alguns segundos depois de um toque
 const galeria = document.querySelector('.galeria');
 let tocouEm = 0;
@@ -111,6 +115,7 @@ if (Date.now() > new Date(CONFIG.dataLimite)) {
             <span id="q-${p.id}|500g|lata">0</span>
             <button type="button" data-k="${p.id}|500g|lata" data-d="1" aria-label="Mais lata ${p.nome} 500g">+</button>
           </span></div>` : ''}`).join('')}
+      ${p.id === 'frutas' ? '<img id="recado-frutas" class="recado" src="fotos/recado-frutas.jpg" width="538" height="421" alt="Recado do padeiro: as frutas NÃO são cristalizadas. Ele usa damasco turco premium e cranberry, e odeia frutas cristalizadas (ou xuxu doce)." hidden>' : ''}
     </div>`).join('');
 }
 
@@ -126,6 +131,7 @@ $('produtos').onclick = e => {
   const total = itensDoPedido().reduce((s, i) => s + precoItem(i), 0);
   $('total').textContent = brl(total);
   $('continuar').disabled = total === 0;
+  $('recado-frutas').hidden = !((qtd['frutas|500g'] || 0) + (qtd['frutas|250g'] || 0));
 };
 
 $('continuar').onclick = () => {

@@ -37,3 +37,5 @@ details > summary { cursor: pointer; font-weight: 700; }
 .linha.lata { padding-left: 12px; font-size: .9rem; color: #666; }
 .espera { color: #8a5a00; }
 .acoes button.on-espera { background: #fff4d6; border-color: #e0b44a; }
+.aviso { background: #fff4d6; border: 2px dashed #c0392b; border-radius: 12px; padding: 12px 14px; }
+.recado { display: block; width: 100%; height: auto; border-radius: 10px; margin-top: 10px; }
